@@ -26,7 +26,7 @@ var preamble = "A Lexile measure is defined as the numeric representation of an 
 func init() {
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Println("Error loading .env file:", err)
 	}
 	simplerPrompt = make(map[string]string)
 	simplerPrompt["L1"] = "Rewrite the given text to Lexile text measure of 190L such that a student between 6-8 years old and in grade 1-2 can understand"
@@ -40,12 +40,13 @@ func init() {
 func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
-	r.Post("/call", call)
+	r.Post("/call/gpt", callGpt)
+	r.Post("/call/gemini", callGemini)
 	http.ListenAndServe(":"+os.Getenv("PORT"), r)
 }
 
 // call the LLM and return the response
-func call(w http.ResponseWriter, r *http.Request) {
+func callGemini(w http.ResponseWriter, r *http.Request) {
 	prompt := struct {
 		Input   string `json:"input"`
 		Setting string `json:"setting"`
@@ -56,9 +57,22 @@ func call(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-
 	gemini(prompt, w)
+}
 
+// call the LLM and return the response
+func callGpt(w http.ResponseWriter, r *http.Request) {
+	prompt := struct {
+		Input   string `json:"input"`
+		Setting string `json:"setting"`
+	}{}
+	// decode JSON from client
+	err := json.NewDecoder(r.Body).Decode(&prompt)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	gpt(prompt, w)
 }
 
 // using OpenAI GPT models
