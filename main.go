@@ -18,9 +18,14 @@ import (
 	"google.golang.org/api/option"
 )
 
-// var simplerPrompt = "Rewrite the given text in a way that an average %s student would understand."
+type Prompt struct {
+	Input   string `json:"input"`
+	Setting string `json:"setting"`
+}
+
 var simplerPrompt map[string]string
 var preamble = "A Lexile measure is defined as the numeric representation of an individual's reading ability or a text's readability (or difficulty), followed by an 'L' (Lexile). Lexile measures range from below 200L for beginning readers and text to 2000L for advanced readers. "
+var handlers map[string]func(Prompt, http.ResponseWriter)
 
 // initialise to load environment variable from .env file
 func init() {
@@ -35,52 +40,34 @@ func init() {
 	simplerPrompt["L4"] = "Rewrite the given text to Lexile text measure of 970L such that a student between 12-14 years old and in grade 7-8 can understand."
 	simplerPrompt["L5"] = "Rewrite the given text to Lexile text measure of 1150L such that a student between 14-16 years old and in grade 9-10 can understand."
 	simplerPrompt["L6"] = "Rewrite the given text to Lexile text measure of 1185L such that a student between 16-18 years old and in grade 11-12 can understand."
+
+	handlers = make(map[string]func(Prompt, http.ResponseWriter))
+	handlers["gpt"] = gpt
+	handlers["gemini"] = gemini
+
 }
 
 func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
-	r.Post("/call/gpt", callGpt)
-	r.Post("/call/gemini", callGemini)
+	r.Post("/call/{llm}", call)
 	http.ListenAndServe(":"+os.Getenv("PORT"), r)
 }
 
 // call the LLM and return the response
-func callGemini(w http.ResponseWriter, r *http.Request) {
-	prompt := struct {
-		Input   string `json:"input"`
-		Setting string `json:"setting"`
-	}{}
-	// decode JSON from client
+func call(w http.ResponseWriter, r *http.Request) {
+	prompt := Prompt{}
 	err := json.NewDecoder(r.Body).Decode(&prompt)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	gemini(prompt, w)
-}
-
-// call the LLM and return the response
-func callGpt(w http.ResponseWriter, r *http.Request) {
-	prompt := struct {
-		Input   string `json:"input"`
-		Setting string `json:"setting"`
-	}{}
-	// decode JSON from client
-	err := json.NewDecoder(r.Body).Decode(&prompt)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	gpt(prompt, w)
+	llm := chi.URLParam(r, "llm")
+	handlers[llm](prompt, w)
 }
 
 // using OpenAI GPT models
-func gpt(prompt struct {
-	Input   string `json:"input"`
-	Setting string `json:"setting"`
-}, w http.ResponseWriter) {
-	// create the LLM
+func gpt(prompt Prompt, w http.ResponseWriter) {
 	llm, err := openai.NewChat(openai.WithModel("gpt-3.5-turbo"))
 	if err != nil {
 		log.Println("Cannot create openAI LLM:", err.Error())
@@ -91,7 +78,9 @@ func gpt(prompt struct {
 	w.Header().Add("mime-type", "text/event-stream")
 	f := w.(http.Flusher)
 	llm.Call(context.Background(), []schema.ChatMessage{
-		schema.SystemChatMessage{Content: preamble + simplerPrompt[prompt.Setting]},
+		schema.SystemChatMessage{
+			Content: preamble + simplerPrompt[prompt.Setting],
+		},
 		schema.HumanChatMessage{Content: prompt.Input},
 	}, llms.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
 		w.Write(chunk)
@@ -102,11 +91,9 @@ func gpt(prompt struct {
 }
 
 // using Google Gemini models
-func gemini(prompt struct {
-	Input   string `json:"input"`
-	Setting string `json:"setting"`
-}, w http.ResponseWriter) {
-	client, err := genai.NewClient(context.Background(), option.WithAPIKey(os.Getenv("GOOGLEAI_API_KEY")))
+func gemini(prompt Prompt, w http.ResponseWriter) {
+	client, err := genai.NewClient(context.Background(),
+		option.WithAPIKey(os.Getenv("GOOGLEAI_API_KEY")))
 	if err != nil {
 		log.Println("cannot create Gemini client:", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -115,7 +102,9 @@ func gemini(prompt struct {
 	defer client.Close()
 
 	gemini := client.GenerativeModel("gemini-pro")
-	iter := gemini.GenerateContentStream(context.Background(), genai.Text(preamble+simplerPrompt[prompt.Setting]), genai.Text(prompt.Input))
+	iter := gemini.GenerateContentStream(context.Background(),
+		genai.Text(preamble+simplerPrompt[prompt.Setting]),
+		genai.Text(prompt.Input))
 	w.Header().Add("mime-type", "text/event-stream")
 	f := w.(http.Flusher)
 	for {
