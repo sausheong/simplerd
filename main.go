@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -44,14 +45,20 @@ func init() {
 	handlers = make(map[string]func(Prompt, http.ResponseWriter))
 	handlers["gpt"] = gpt
 	handlers["gemini"] = gemini
-
 }
 
 func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Post("/call/{llm}", call)
-	http.ListenAndServe(":"+os.Getenv("PORT"), r)
+	server := &http.Server{
+		Addr:         ":" + os.Getenv("PORT"),
+		Handler:      r,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+	server.ListenAndServe()
 }
 
 // call the LLM and return the response
@@ -63,7 +70,13 @@ func call(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	llm := chi.URLParam(r, "llm")
-	handlers[llm](prompt, w)
+	handler, ok := handlers[llm]
+	if ok {
+		handler(prompt, w)
+	} else {
+		http.Error(w, "No such model.", http.StatusBadRequest)
+		return
+	}
 }
 
 // using OpenAI GPT models
@@ -75,7 +88,7 @@ func gpt(prompt Prompt, w http.ResponseWriter) {
 		return
 	}
 
-	w.Header().Add("mime-type", "text/event-stream")
+	w.Header().Set("Content-Type", "text/event-stream")
 	f := w.(http.Flusher)
 	llm.Call(context.Background(), []schema.ChatMessage{
 		schema.SystemChatMessage{
@@ -105,7 +118,7 @@ func gemini(prompt Prompt, w http.ResponseWriter) {
 	iter := gemini.GenerateContentStream(context.Background(),
 		genai.Text(preamble+simplerPrompt[prompt.Setting]),
 		genai.Text(prompt.Input))
-	w.Header().Add("mime-type", "text/event-stream")
+	w.Header().Set("Content-Type", "text/event-stream")
 	f := w.(http.Flusher)
 	for {
 		resp, err := iter.Next()
