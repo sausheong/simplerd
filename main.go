@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -51,14 +50,7 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Post("/call/{llm}", call)
-	server := &http.Server{
-		Addr:         ":" + os.Getenv("PORT"),
-		Handler:      r,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-		IdleTimeout:  60 * time.Second,
-	}
-	server.ListenAndServe()
+	http.ListenAndServe(":"+os.Getenv("PORT"), r)
 }
 
 // call the LLM and return the response
