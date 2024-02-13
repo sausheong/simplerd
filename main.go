@@ -34,12 +34,12 @@ func init() {
 		log.Println("Error loading .env file:", err)
 	}
 	simplerPrompt = make(map[string]string)
-	simplerPrompt["L1"] = "Rewrite the given text to Lexile text measure of 190L such that a student between 6-8 years old and in grade 1-2 can understand"
-	simplerPrompt["L2"] = "Rewrite the given text to Lexile text measure of 520L such that a student between 8-10 years old and in grade 3-4 can understand."
-	simplerPrompt["L3"] = "Rewrite the given text to Lexile text measure of 830L such that a student between 10-12 years old and in grade 5-6 can understand."
-	simplerPrompt["L4"] = "Rewrite the given text to Lexile text measure of 970L such that a student between 12-14 years old and in grade 7-8 can understand."
-	simplerPrompt["L5"] = "Rewrite the given text to Lexile text measure of 1150L such that a student between 14-16 years old and in grade 9-10 can understand."
-	simplerPrompt["L6"] = "Rewrite the given text to Lexile text measure of 1185L such that a student between 16-18 years old and in grade 11-12 can understand."
+	simplerPrompt["L1"] = "Rewrite the given text to Lexile text measure of 190L such that a student in grade 1-2 can understand"
+	simplerPrompt["L2"] = "Rewrite the given text to Lexile text measure of 520L such that a student in grade 3-4 can understand."
+	simplerPrompt["L3"] = "Rewrite the given text to Lexile text measure of 830L such that a student in grade 5-6 can understand."
+	simplerPrompt["L4"] = "Rewrite the given text to Lexile text measure of 970L such that a student in grade 7-8 can understand."
+	simplerPrompt["L5"] = "Rewrite the given text to Lexile text measure of 1150L such that a student in grade 9-10 can understand."
+	simplerPrompt["L6"] = "Rewrite the given text to Lexile text measure of 1185L such that a student in grade 11-12 can understand."
 
 	handlers = make(map[string]func(Prompt, http.ResponseWriter))
 	handlers["gpt"] = gpt
